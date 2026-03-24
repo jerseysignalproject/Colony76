@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Colony '76 - Audio Restored</title>
+  <style>
+    :root { --p: #0ad110; --gold: #ffeb3b; --pink: #ff00ff; --cyan: #00ffff; --red: #ff4444; --ai: #622; }
+    body { background: #050505; color: var(--p); font-family: 'Courier New', monospace; margin: 0; overflow: hidden; text-transform: uppercase; }
+    body.scanlines::before { content: " "; display: block; position: absolute; inset: 0; background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 255, 0, 0.06)); z-index: 100; background-size: 100% 4px, 3px 100%; pointer-events: none; }
+    body.fx-noise .t::before { content: ''; position: absolute; inset: 0; background: url('data:image/svg+xml;utf8,<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"><filter id="noise"><feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" stitchTiles="stitch"/></filter><rect width="100%" height="100%" filter="url(%23noise)" opacity="0.3"/></svg>'); mix-blend-mode: overlay; pointer-events: none; }
+    body.fx-dither .t::after { content: ''; position: absolute; inset: 0; background-image: repeating-conic-gradient(rgba(0,0,0,0.3) 0% 25%, transparent 0% 50%); background-size: 4px 4px; mix-blend-mode: multiply; pointer-events: none; }
+    #ui { position: fixed; top: 0; width: 100%; background: #111; padding: 15px; z-index: 50; border-bottom: 4px ridge var(--p); box-shadow: 0 5px 20px #000; box-sizing: border-box; }
+    #title-wrap { transform: skew(-10deg); margin-bottom: 10px; display: inline-block; }
+    #title { font-size: 32px; font-weight: 900; color: #fff; text-shadow: 2px 2px var(--pink), -2px -2px var(--cyan); line-height: 0.8; }
+    #subtitle { font-size: 12px; color: var(--gold); letter-spacing: 2px; margin-top: 4px; }
+    #stats span { margin-right: 12px; border: 1px solid var(--p); padding: 4px 8px; background: #000; color: #fff; display: inline-block; font-size: 13px; }
+    #v { width: 100vw; height: 100vh; overflow: auto; padding-top: 260px; background: #0a0a0a; scroll-behavior: smooth; }
+    #g { position: relative; margin-bottom: 500px; margin-left: 20px; }
+    .t { position: absolute; display: flex; align-items: center; justify-content: center; font-size: calc(var(--ts) * 0.4); cursor: pointer; clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%); transition: filter 0.1s; contain: strict; font-family: 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif; background: var(--c-bg); }
+    .t:hover { filter: brightness(1.3); z-index: 10; outline: 1px solid #fff; }
+    .t.p-tile { border: 1px solid var(--p); box-shadow: inset 0 0 10px rgba(10, 209, 16, 0.5); }
+    .t.ai-tile { border: 1px solid var(--red); box-shadow: inset 0 0 10px rgba(255, 68, 68, 0.5); }
+    #tabs { display: flex; gap: 5px; margin-top: 10px; }
+    .tab { background: #222; color: #888; border: 1px solid #444; padding: 5px 10px; cursor: pointer; font-family: inherit; font-size: 11px; }
+    .tab.active { background: var(--p); color: #000; border-color: var(--p); }
+    #menu { display: flex; flex-wrap: wrap; gap: 4px; max-width: 900px; margin-top: 10px; min-height: 30px;}
+    button { background: #000; color: var(--p); border: 1px solid var(--p); padding: 6px 10px; cursor: pointer; font-family: inherit; font-size: 11px; }
+    button:hover { background: var(--p); color: #000; }
+    button.active { background: #fff; color: #000; border-color: #fff; }
+    button.lock { opacity: 0.3; cursor: not-allowed; filter: grayscale(1); border-color: #444; }
+    #msg { color: #fff; background: var(--red); padding: 5px 15px; font-size: 14px; position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); visibility: hidden; z-index: 1000; border: 2px solid #fff; }
+    .overlay { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #111; padding: 20px; border: 2px solid var(--gold); z-index: 2000; box-shadow: 0 0 30px #000; text-align: center; max-width: 400px;}
+    .overlay h2 { margin-top: 0; color: var(--gold); text-shadow: 1px 1px var(--pink); }
+    .overlay p { color: #fff; font-size: 14px; line-height: 1.4;}
+    .set-row { margin-bottom: 10px; font-size: 14px; text-align: left;}
+
+    /* MOBILE USABILITY OVERRIDES */
+    @media screen and (max-width: 768px) {
+        #ui { padding: 8px; }
+        #title { font-size: 20px; }
+        #subtitle { font-size: 9px; letter-spacing: 1px; }
+        #stats { display: flex; overflow-x: auto; white-space: nowrap; padding-bottom: 5px; margin-top: 5px; }
+        #stats span { font-size: 11px; margin-right: 5px; flex-shrink: 0; }
+        #tabs { overflow-x: auto; padding-bottom: 5px; scrollbar-width: none; }
+        #tabs::-webkit-scrollbar { display: none; }
+        .tab { flex-shrink: 0; padding: 8px 12px; font-size: 10px; }
+        #menu { overflow-x: auto; flex-wrap: nowrap; padding-bottom: 8px; scrollbar-width: none; }
+        #menu::-webkit-scrollbar { display: none; }
+        #menu button { flex-shrink: 0; padding: 10px 14px; font-size: 10px; }
+        #v { padding-top: 220px; }
+        .overlay { width: 85%; }
+        #quickMus { font-size: 10px; padding: 4px 8px; }
+    }
+  </style>
+</head>
+<body class="scanlines">
+
+<div id="ui">
+  <div style="display:flex; justify-content:space-between; max-width: 900px; align-items: flex-start;">
+      <div id="title-wrap">
+        <div id="title">COLONY '76</div>
+        <div id="subtitle">THE COLONIST SIMULATOR!</div>
+      </div>
+      <div style="display: flex; gap: 5px;">
+          <button id="quickMus" onclick="toggleMusic(true)" style="border-color: var(--cyan); color: var(--cyan);">🎵 OFF</button>
+          <button id="pauseBtn" onclick="togglePause()" style="border-color: var(--gold); color: var(--gold);">⏸ PAUSE</button>
+          <button onclick="document.getElementById('settings').style.display='block'">⚙️ SETTINGS</button>
+      </div>
+  </div>
+  <div id="stats">
+    <span id="date"></span> 💰 $<b id="m"></b> 👥 <b id="p"></b> 🌾 <b id="f"></b> <span id="hunger-warn" style="color:var(--red);display:none">⚠️STARVING</span> 🏔️ <b id="season"></b> | <span style="color:var(--gold)">ERA: <b id="era-name">STONE AGE</b></span> | <span style="color:var(--red)">AI 👥 <b id="ap"></b></span>
+  </div>
+  <div id="tabs">
+      <button class="tab active" onclick="setTab('Crops')">CROPS</button>
+      <button class="tab" onclick="setTab('Dwellings')">DWELLINGS</button>
+      <button class="tab" onclick="setTab('Industry')">INDUSTRY</button>
+      <button class="tab" onclick="setTab('Special')">SPECIAL</button>
+      <button class="tab" onclick="setTab('Discoveries')">DISCOVERIES</button>
+  </div>
+  <div id="menu"></div>
+  <div style="margin-top:10px; font-size: 12px; display: flex; align-items: center; gap: 10px;">
+    <span id="rnk" style="color:var(--gold); border-color:var(--gold); padding: 2px 5px; border: 1px solid"></span> 
+    <div style="flex-grow:1; display:flex; align-items:center; gap:5px;">
+        SPD: <input type="range" id="spd" min="0" max="3" value="1" style="vertical-align:middle; width: 60px;">
+        ZOOM: <input type="range" id="zoom" min="20" max="100" value="48" style="vertical-align:middle; width: 60px;" oninput="updateZoom(this.value)">
+    </div>
+  </div>
+</div>
+
+<div id="settings" class="overlay">
+    <h2>SYSTEM SETTINGS</h2>
+    <div class="set-row"><label><input type="checkbox" onchange="document.body.classList.toggle('scanlines')" checked> CRT Scanlines</label></div>
+    <div class="set-row"><label><input type="checkbox" onchange="document.body.classList.toggle('fx-noise')"> Texture Noise</label></div>
+    <div class="set-row"><label><input type="checkbox" onchange="document.body.classList.toggle('fx-dither')"> Hardware Dither</label></div>
+    <div class="set-row"><label><input type="checkbox" id="musToggle" onchange="toggleMusic()"> Music</label></div>
+    <div class="set-row"><label><input type="checkbox" id="sfxToggle" checked> SFX</label></div>
+    <hr style="border-color:#333">
+    <button onclick="document.getElementById('settings').style.display='none'">CLOSE</button>
+</div>
+
+<div id="announcement" class="overlay">
+    <h2 id="anc-title">DISCOVERY!</h2>
+    <p id="anc-desc"></p>
+    <button onclick="document.getElementById('announcement').style.display='none'">CONTINUE</button>
+</div>
+
+<div id="gameover" class="overlay">
+    <h2 id="go-title">GAME OVER</h2>
+    <p id="go-desc"></p>
+    <button onclick="location.reload()">REBOOT</button>
+</div>
+
+<div id="msg">ALERT</div>
+<div id="v"><div id="g"></div></div>
+
+<script>
+// --- ZZFX & ZZFXM Micro Libraries (Optimized) ---
+const zzfxX = new (window.AudioContext || webkitAudioContext);
+const zzfxV = 0.5; // Increased global volume
+
+const zzfx = (...t) => zzfxP(zzfxG(...t));
+const zzfxP = (t) => {
+    if (zzfxX.state !== 'running') zzfxX.resume();
+    let e = zzfxX.createBufferSource(), f = zzfxX.createBuffer(1, t.length, 44100);
+    f.getChannelData(0).set(t); e.buffer = f; e.connect(zzfxX.destination); e.start(); return e
+};
+
+const zzfxG = (q=1,k=.05,c=220,e=0,t=0,u=.1,r=0,F=1,v=0,z=0,w=0,A=0,l=0,B=0,x=0,G=0,d=0,y=1,m=0,C=0)=>{
+    let b=2*Math.PI,H=v*=500*b/44100**2,I=(0<x?1:-1)*b/44100,J=c*=(1+2*k*Math.random()-k)*b/44100,K=[],g=0,E=0,a=0,n=1,J0=0,O=0,P=0,D=0,Z;
+    e=44100*e+9;m*=44100;t*=44100;u*=44100;d*=44100;z*=500*b/44100**3;x*=b/44100;w*=b/44100;A*=44100;l=44100*l|0;
+    for(h=e+m+t+u+d|0;a<h;K[a++]=D)++O%(100*G|0)||(D=r?1<r?2<r?3<r?Math.sin((g%b)**3):Math.max(Math.min(Math.tan(g),1),-1):1-(2*g/b%2+2)%2:1-4*Math.abs(Math.round(g/b)-g/b):Math.sin(g),D=(l?1-C+C*Math.sin(2*Math.PI*a/l):1)*(0<D?1:-1)*Math.abs(D)**F*q*zzfxV*(a<e?a/e:a<e+m?1-(a-e)/m*(1-y):a<e+m+t?y:a<h-d?(h-a-d)/u*y:0),D=d?D/2+(d>a?0:(a<h-d?1:(h-a)/d)*K[a-d|0]/2):D),Z=(c+=v+=z)*Math.sin(E*x-I),g+=Z-Z*w*(1-1E9*(Math.sin(a)+1)%2),E+=Z-Z*w*(1-1E9*(Math.sin(a)**2+1)%2),n&&++n>A&&(c+=B*=500*b/44100**3,J0||(J0=c,c=0),n=0),J0&&++J0>l&&(c=J0,J0=0);
+    return K
+};
+
+const zzfxM = (n, f, t, e = 125) => {
+    let l, o, z, r, g, h, x, a, u, c, d, i, m, p, G, M = 0, R = [], b = [], j = [], k = 0, q = 0, s = 1, v = {}, w = zzfxX.sampleRate, y = e / 60 * w / 4;
+    for (; k < n.length; k++) {
+        for (c = n[k], u = 0; u < c.length; u++) {
+            for (d = c[u], i = d[0], p = 0; p < d.length - 1; p++) {
+                if (i !== f[k][0]) for (x = 0; x < f[k].length; x++) if (i === f[k][x][0]) { i = f[k][x]; break }
+                if (i) {
+                    o = d[p + 1], z = i[1], r = i[2], g = i[3], h = i[4], l = zzfxG(...z), a = 0;
+                    for (; a < l.length; a++) m = M + p * y * h + a, R[m] = (R[m] || 0) + l[a] * o * r, b[m] = (b[m] || 0) + l[a] * o * g, j[m] = (j[m] || 0) + l[a] * o * s;
+                    G = M + p * y * h + l.length; if (G > q) q = G
+                }
+            }
+        } M += y * d.length * h
+    }
+    let H = zzfxX.createBufferSource(), I = zzfxX.createBuffer(3, q, w);
+    I.getChannelData(0).set(R); I.getChannelData(1).set(b); I.getChannelData(2).set(j);
+    H.buffer = I; H.connect(zzfxX.destination); return H
+};
+
+// --- Updated Sound Data ---
+const sfx = {
+  build: [1.2, , 300, .1, .1, .2, 1, 1.1, , , -100, , , , , , , .5],  
+  error: [1.5, , 150, .1, .2, .2, 3, 1.5, , , , , , , .1],
+  boom: [2, , 100, .1, .3, .6, 4, 2, , , .1, , , .1, 10, , , .5],
+  tada: [1.5, , 600, .1, .3, .5, 1, 1.5, , -10, 100, , , .1]
+};
+
+const playSFX = (type) => { 
+    if (document.getElementById('sfxToggle').checked) {
+        if (zzfxX.state !== 'running') zzfxX.resume();
+        zzfx(...sfx[type]); 
+    }
+};
+
+const GameAudio = {
+    ctx: null, panner: null, delay: null, feedback: null, wet: null,
+    isPlaying: false, loopTimer: null, step: 0, track: null,
+    scales: [[0,2,4,7,9], [0,3,5,7,10], [0,2,3,5,7,8,10], [0,1,3,5,7,8,10]],
+    arrangements: [
+        { style: 'chip', lead: 'square', bass: 'triangle', leadVol: 0.1, bassVol: 0.35, poly: 1, swing: 0 },
+        { style: 'heavy', lead: 'sawtooth', bass: 'square', leadVol: 0.05, bassVol: 0.25, poly: 1, swing: 0 },
+        { style: 'lofi', lead: 'sine', bass: 'triangle', leadVol: 0.15, bassVol: 0.4, poly: 3, swing: 0.2 },
+        { style: 'jazz', lead: 'triangle', bass: 'sine', leadVol: 0.1, bassVol: 0.4, poly: 4, swing: 0.35 }
+    ],
+    init() {
+        if (this.ctx) return;
+        this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        this.panner = this.ctx.createStereoPanner();
+        this.delay = this.ctx.createDelay(2.0);
+        this.feedback = this.ctx.createGain();
+        this.wet = this.ctx.createGain();
+        this.delay.connect(this.feedback);
+        this.feedback.connect(this.delay);
+        this.delay.connect(this.ctx.destination);
+        this.panner.connect(this.ctx.destination);
+    },
+    generateTrack(stylePreset = 'chip') {
+        const arrs = this.arrangements.filter(a => a.style === stylePreset);
+        const instr = arrs[Math.floor(Math.random() * arrs.length)];
+        const scale = this.scales[Math.floor(Math.random() * this.scales.length)];
+        const patterns = [];
+        for(let i=0; i<4; i++) {
+            patterns.push({
+                lead: Array.from({length: 8}, () => scale[Math.floor(Math.random()*scale.length)]),
+                chords: Array.from({length: 8}, () => Math.random() > 0.4 ? scale : null),
+                bass: Array.from({length: 8}, () => [0, -12, -5, -7][Math.floor(Math.random()*4)]),
+                perc: Array.from({length: 8}, () => Math.random() > 0.75 ? 1 : 0)
+            });
+        }
+        return {
+            bpm: (stylePreset === 'lofi' || stylePreset === 'jazz') ? (70 + Math.random()*25|0) : (100 + Math.random()*50|0),
+            instr: instr,
+            patterns: patterns,
+            fx: { reverb: Math.random()*0.4, echo: Math.random()*0.3, intensity: 0.9, bassShift: [0, -12][Math.floor(Math.random()*2)], sustain: 0.15, pan: 0 },
+            seq: Array.from({length: 16}, () => Math.floor(Math.random()*4))
+        };
+    },
+    play(style = 'chip') {
+        this.init();
+        if (this.ctx.state === 'suspended') this.ctx.resume();
+        this.stop(); 
+        this.track = this.generateTrack(style);
+        this.step = 0;
+        this.isPlaying = true;
+        this.tick();
+    },
+    stop() {
+        this.isPlaying = false;
+        if (this.loopTimer) clearTimeout(this.loopTimer);
+    },
+    tick() {
+        if (!this.isPlaying) return;
+        const t = this.track;
+        if (this.step >= t.seq.length * 8) this.step = 0; 
+        const pattern = t.patterns[t.seq[Math.floor(this.step / 8)]];
+        const subStep = this.step % 8;
+        const baseSpeed = 60 / t.bpm / 2; 
+        const speed = (this.step % 2 === 0) ? baseSpeed * (1 + t.instr.swing) : baseSpeed * (1 - t.instr.swing);
+        const now = this.ctx.currentTime;
+        if(t.instr.style === 'lofi' && Math.random() > 0.8) this.noise(0.01, now);
+        this.delay.delayTime.setTargetAtTime(baseSpeed * 1.5, now, 0.1);
+        this.feedback.gain.setTargetAtTime(t.fx.echo, now, 0.1);
+        this.wet.gain.setTargetAtTime(t.fx.reverb, now, 0.1);
+        this.panner.pan.setTargetAtTime(t.fx.pan, now, 0.1);
+        this.osc(pattern.lead[subStep]+12, t.instr.lead, t.instr.leadVol*t.fx.intensity, now, t.fx.sustain, t.instr.style);
+        if (t.instr.poly > 1 && pattern.chords[subStep]) {
+            pattern.chords[subStep].slice(0, t.instr.poly).forEach((offset) => {
+                this.osc(offset + 12, t.instr.lead, (t.instr.leadVol*0.4)*t.fx.intensity, now, t.fx.sustain*2, t.instr.style);
+            });
+        }
+        if(subStep%4==0){
+            this.osc(pattern.bass[subStep]+t.fx.bassShift, t.instr.bass, t.instr.bassVol*t.fx.intensity, now, t.fx.sustain*1.2, t.instr.style);
+        }
+        if(pattern.perc[subStep]) this.noise(0.05*t.fx.intensity, now);
+        this.step++;
+        this.loopTimer = setTimeout(() => this.tick(), speed * 1000);
+    },
+    osc(note, type, vol, time, sustain, style) {
+        const o = this.ctx.createOscillator(), g = this.ctx.createGain();
+        o.type = type; 
+        o.frequency.value = 220 * Math.pow(2, note/12);
+        g.gain.setValueAtTime(0.0001, time);
+        g.gain.setTargetAtTime(vol, time, 0.015);
+        g.gain.setTargetAtTime(0.0001, time + sustain, 0.05);
+        if (style === 'lofi' || style === 'jazz') {
+            const filter = this.ctx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.value = style === 'lofi' ? 800 : 1200;
+            o.connect(filter).connect(g);
+        } else { o.connect(g); }
+        g.connect(this.panner); 
+        g.connect(this.wet).connect(this.delay);
+        o.start(time); o.stop(time + sustain + 0.5);
+    },
+    noise(vol, time) {
+        const b = this.ctx.createBuffer(1, this.ctx.sampleRate*0.05, this.ctx.sampleRate), d = b.getChannelData(0);
+        for(let i=0; i<b.length; i++) d[i] = Math.random()*2-1;
+        const s = this.ctx.createBufferSource(), g = this.ctx.createGain();
+        s.buffer = b; g.gain.value = vol;
+        s.connect(g).connect(this.ctx.destination);
+        s.start(time);
+    }
+};
+
+const toggleMusic = (fromQuick = false) => {
+    // Ensure audio context is running (required after user gesture)
+    if (zzfxX.state !== 'running') zzfxX.resume();
+    const cb = document.getElementById('musToggle');
+    if(fromQuick) cb.checked = !cb.checked;
+    const isChecked = cb.checked;
+    const qBtn = document.getElementById('quickMus');
+    qBtn.innerText = isChecked ? "🎵 ON" : "🎵 OFF";
+    qBtn.style.color = isChecked ? "var(--cyan)" : "var(--p)";
+    qBtn.style.borderColor = isChecked ? "var(--cyan)" : "var(--p)";
+    if (isChecked) {
+        GameAudio.init();
+        if (GameAudio.ctx.state === 'suspended') GameAudio.ctx.resume();
+        GameAudio.play('chip');
+    } else {
+        GameAudio.stop();
+    }
+};
+
+window.addEventListener('click', () => {
+    if (zzfxX.state === 'suspended') zzfxX.resume();
+    if (GameAudio.ctx && GameAudio.ctx.state === 'suspended') GameAudio.ctx.resume();
+}, { once: true });
+
+// --- Game Logic ---
+let money=500, pop=0, food=0, foodBank=0, moneyAI=1200, popAI=0, foodAI=0, day=1, tool=1, sz=40, grid=[], owner=[], timer, speed=1500, tileSize=48;
+let activeTab = 'Crops', highestPop = 0, highestAIPop = 0, negativeDays = 0, gameOver = false, paused = false;
+let starvationActive = false;
+const flags = { copper:false, iron:false, sail:false, mechanical:false, industrial:false, atomic:false };
+// era: 0=Stone,1=Copper,2=Iron,3=Sail,4=Mechanical,5=Industrial,6=Atomic
+let currentEra = 0;
+const eraNames = ['STONE AGE','COPPER AGE','IRON AGE','AGE OF SAIL','MECHANICAL AGE','INDUSTRIAL AGE','ATOMIC AGE'];
+
+const types = [
+  // 0-3: Terrain (None category)
+  {n:'Dirt',    c:'#3d2b1f', s:'',   cost:0,    cat:'None'},
+  {n:'Forest',  c:'#1b5e20', s:'🌲', cost:0,    cat:'None'},
+  {n:'Water',   c:'#0d47a1', s:'~',  cost:0,    solid:1, cat:'None'},
+  {n:'Mtn',     c:'#424242', s:'⛰️', cost:0,    solid:1, cat:'None'},
+  // 4-5: Stone Age Crops (always unlocked)
+  {n:'Yurt',    c:'#8d6e63', s:'⛺', cost:15,   p:4,      cat:'Dwellings',   era:0},
+  {n:'Corn',    c:'#d4af37', s:'🌿', cost:25,   food:10,  cat:'Crops',       era:0},
+  // 6-8: Copper Age (50 pop)
+  {n:'Road',    c:'#222',    s:'+',  cost:5,    maint:1,  cat:'Special',     era:1, reqFlag:'copper'},
+  {n:'Cabin',   c:'#5d4037', s:'🏡', cost:80,   p:18,     cat:'Dwellings',   era:1, reqFlag:'copper'},
+  {n:'Fire',    c:'#ff5722', s:'🔥', cost:10,             cat:'Discoveries', era:1, reqFlag:'copper'},
+  // 9-11: Iron Age (200 pop)
+  {n:'Wheat',   c:'#f4d03f', s:'🌾', cost:50,   food:30,  cat:'Crops',       era:2, reqFlag:'iron'},
+  {n:'Quarry',  c:'#78909c', s:'🪨', cost:400,  tax:80, maint:15, cat:'Industry', era:2, reqFlag:'iron', needsMtn:true},
+  {n:'Bulldoze',c:'#b71c1c', s:'🚜', cost:100,            cat:'Discoveries', era:2, reqFlag:'iron'},
+  // 12-15: Age of Sail (500 pop)
+  {n:'Docks',   c:'#6a4c33', s:'⚓', cost:150,  tax:60, maint:10, cat:'Special',   era:3, reqFlag:'sail'},
+  {n:'Boats',   c:'#b27749', s:'🛶', cost:100,  food:45,  cat:'Crops',       era:3, reqFlag:'sail'},
+  {n:'Rice',    c:'#4a85b5', s:'🥣', cost:100,  food:70,  cat:'Crops',       era:3, reqFlag:'sail'},
+  {n:'Market',  c:'#f39c12', s:'🏪', cost:500,  tax:120,  cat:'Industry',    era:3, reqFlag:'sail'},
+  // 16-18: Mechanical Age (1200 pop)
+  {n:'House',   c:'#455a64', s:'🏠', cost:250,  p:65,     cat:'Dwellings',   era:4, reqFlag:'mechanical'},
+  {n:'Silo',    c:'#4e342e', s:'🛢️', cost:100,  storage:5,cat:'Special',     era:4, reqFlag:'mechanical'},
+  {n:'Mill',    c:'#795548', s:'🏚️', cost:350,  food:20, tax:40, maint:20, cat:'Industry', era:4, reqFlag:'mechanical'},
+  // 19-21: Industrial Age (2500 pop)
+  {n:'Apartment',c:'#2c3e50',s:'🏢', cost:1200, p:280,    cat:'Dwellings',   era:5, reqFlag:'industrial'},
+  {n:'Factory', c:'#37474f', s:'🏭', cost:1500, p:20, tax:280, maint:100, cat:'Industry', era:5, reqFlag:'industrial'},
+  {n:'Bank',    c:'#145a32', s:'🏦', cost:2500, tax:750,  cat:'Industry',    era:5, reqFlag:'industrial'},
+  // 22-23: Atomic Age (5000 pop)
+  {n:'Refinery',c:'#1b2631', s:'🏗️', cost:5000, tax:1400, maint:500, cat:'Industry', era:6, reqFlag:'atomic'},
+  {n:'Dynamite',c:'#ff0000', s:'🧨', cost:500,            cat:'Discoveries', era:6, reqFlag:'atomic'},
+  // 24: Vineyard (Iron Age luxury)
+  {n:'Vineyard',c:'#6c3483', s:'🍇', cost:150,  food:30, tax:45, cat:'Crops', era:2, reqFlag:'iron'},
+];
+
+const injectStyles = () => {
+  let css = ':root { ';
+  types.forEach((t, i) => css += `--c-${i}: ${t.c}; `);
+  css += '} body.winter { --c-0: #a5f2f3; --c-1: #8d99ae; --c-2: #81d4fa; --c-3: #eceff1; --c-5: #4a3728; --c-9: #4a3728; --c-13: #4a3728; --c-24: #4a3728; }';
+  let s = document.createElement('style'); s.innerHTML = css; document.head.appendChild(s);
+}; injectStyles();
+
+const initMap = () => {
+  grid = new Array(sz*sz).fill(0); owner = new Array(sz*sz).fill(0);
+  const targetWater = Math.floor((sz*sz) * 0.33);
+  let waterPlaced = 0;
+  while(waterPlaced < targetWater) {
+      let rx = Math.floor(Math.random()*(sz-2))+1, ry = Math.floor(Math.random()*(sz-2))+1;
+      let rw = Math.floor(Math.random()*4)+2, rh = Math.floor(Math.random()*4)+2;
+      for(let y=ry; y<ry+rh && y<sz; y++) for(let x=rx; x<rx+rw && x<sz; x++) { if(grid[y*sz+x] !== 2) { grid[y*sz+x] = 2; waterPlaced++; } }
+  }
+  for(let c=0; c<10; c++) {
+      let rx = Math.floor(Math.random()*sz), ry = Math.floor(Math.random()*sz);
+      for(let y=ry; y<ry+3 && y<sz; y++) for(let x=rx; x<rx+3 && x<sz; x++) if(grid[y*sz+x]===0) grid[y*sz+x] = 3;
+  }
+  for(let c=0; c<15; c++) {
+      let rx = Math.floor(Math.random()*sz), ry = Math.floor(Math.random()*sz);
+      for(let y=ry; y<ry+4 && y<sz; y++) for(let x=rx; x<rx+4 && x<sz; x++) if(grid[y*sz+x]===0) grid[y*sz+x] = 1;
+  }
+  owner[0] = 1; owner[sz*sz-1] = 2;
+};
+
+const getNeighbors = (i, dist=1) => {
+  let x=i%sz, y=(i/sz)|0, n=[], add=(nx,ny)=>{if(nx>=0&&nx<sz&&ny>=0&&ny<sz) n.push(ny*sz+nx)};
+  if(dist===1) { add(x-1,y); add(x+1,y); let off = y%2===0 ? [[0,-1],[1,-1],[0,1],[1,1]] : [[-1,-1],[0,-1],[-1,1],[0,1]]; off.forEach(o => add(x+o[0], y+o[1])); }
+  else { for(let dy=-dist; dy<=dist; dy++) for(let dx=-dist; dx<=dist; dx++) if(dx!==0 || dy!==0) add(x+dx, y+dy); }
+  return n;
+};
+
+const renderMap = () => {
+  let h = '';
+  for(let i=0; i<grid.length; i++) {
+    let x=i%sz, y=(i/sz)|0, px=x*tileSize+(y%2?tileSize/2:0), py=y*tileSize*0.75;
+    h += `<div onclick="build(${i})" id="t${i}" class="t ${owner[i]==1?'p-tile':owner[i]==2?'ai-tile':''}" style="--c-bg: ${owner[i]==2 ? 'var(--ai)' : `var(--c-${grid[i]})`}; width:${tileSize}px; height:${tileSize}px; left:${px}px; top:${py}px;">${types[grid[i]].s}</div>`;
+  }
+  document.getElementById('g').innerHTML = h;
+};
+
+window.setTab = (tabName) => { document.querySelectorAll('.tab').forEach(e => e.classList.remove('active')); event.target.classList.add('active'); activeTab = tabName; updateUI(); };
+const notify = (m) => { let e=document.getElementById('msg'); e.innerText=m; e.style.visibility='visible'; playSFX('error'); setTimeout(()=>e.style.visibility='hidden',2000)};
+const showOverlay = (id, title, desc) => { let el = document.getElementById(id); document.getElementById((id==='announcement'?'anc':'go')+'-title').innerText = title; document.getElementById((id==='announcement'?'anc':'go')+'-desc').innerHTML = desc; el.style.display = 'block'; if(id==='announcement') playSFX('tada'); };
+const isWaterTile = (gIdx) => [2, 12, 13, 14].includes(gIdx);
+const isCropTile = (gIdx) => [5, 9, 13, 14, 24].includes(gIdx);
+
+const validateBuild = (i, tIdx, pOwner) => {
+  let oppOwner = pOwner === 1 ? 2 : 1;
+  let g = grid[i], n = getNeighbors(i);
+  let isW = g === 2, isM = g === 3;
+  // Fire tool (idx 8): clears crops or forests
+  if (tIdx === 8) { if(![5,9,13,14,24,1].includes(g)) return "FIRE ONLY CLEARS CROPS OR FORESTS"; if(owner[i] === oppOwner) return "CANNOT BURN ENEMY TILES"; return true; }
+  // Bulldoze tool (idx 11): clears any land tile
+  if (tIdx === 11) { if(isWaterTile(g)) return "CANNOT BULLDOZE WATER-BASED TILES"; if(owner[i] === oppOwner) return "CANNOT BULLDOZE ENEMY TILES"; if(g === 0) return "NOTHING TO BULLDOZE"; return true; }
+  // Dynamite tool (idx 23): clears anything including mountains
+  if (tIdx === 23) { if(isWaterTile(g)) return "DYNAMITE CANNOT CLEAR WATER-BASED TILES"; if(g === 0) return "NOTHING TO DYNAMITE"; return true; }
+  if (g !== 0 && g !== 2) return "MUST CLEAR TILE FIRST";
+  if (owner[i] === oppOwner) return "TILE OCCUPIED BY ENEMY";
+  // Docks (12): water tile, must touch land
+  if (tIdx === 12) { if(!isW) return "DOCKS MUST BE ON WATER"; if(!n.some(ni => grid[ni] !== 2)) return "DOCKS NEED ADJACENT LAND"; return true; }
+  // Boats (13), Rice (14): water only
+  if (tIdx === 13) { if(!isW) return "BOATS MUST BE ON WATER"; return true; }
+  if (tIdx === 14) { if(!isW) return "RICE MUST BE GROWN IN WATER"; if(!n.some(ni => grid[ni] !== 2)) return "RICE NEEDS ADJACENT LAND"; return true; }
+  // Quarry (10): must be adjacent to mountain
+  if (tIdx === 10) { if(isW || isM) return "INVALID TERRAIN"; if(!n.some(ni => grid[ni] === 3)) return "QUARRY MUST BE NEAR MOUNTAINS"; return true; }
+  // Corn (5), Wheat (9), Vineyard (24): must have adjacent water or crop
+  if ([5, 9, 24].includes(tIdx)) { if (isW || isM) return "INVALID CROP TERRAIN"; if (!n.some(ni => grid[ni] === 2 || isCropTile(grid[ni]))) return "CROP NEEDS ADJ WATER OR CROP"; return true; }
+  if (isW || isM) return "INVALID TERRAIN";
+  return true;
+};
+
+window.build = (i, isAI=false, aiTool=null) => {
+  if (gameOver) return;
+  const activeTool = isAI ? aiTool : tool;
+  const target = types[activeTool];
+  const pOwner = isAI ? 2 : 1;
+  const purse = isAI ? moneyAI : money;
+  if (!isAI && money < 0) return notify("BANKRUPT! WAIT FOR TAX REVENUE");
+  if (purse < (target.cost||0)) return !isAI && notify("INSUFFICIENT FUNDS");
+  let val = validateBuild(i, activeTool, pOwner);
+  if (val !== true) return !isAI && notify(val);
+  // Destruction tools: Fire(8), Bulldoze(11), Dynamite(23)
+  if ([8, 11, 23].includes(activeTool)) {
+    if (activeTool === 23 && !isAI) playSFX('boom');
+    grid[i] = (grid[i] === 2) ? 2 : 0; owner[i] = 0;
+  } else {
+    grid[i] = activeTool; owner[i] = pOwner;
+    if(!isAI) playSFX('build');
+  }
+  if (isAI) moneyAI -= (target.cost||0); else money -= (target.cost||0);
+  const el = document.getElementById('t'+i);
+  el.style.setProperty('--c-bg', owner[i]==2 ? 'var(--ai)' : `var(--c-${grid[i]})`);
+  el.innerText = types[grid[i]].s; el.className = `t ${owner[i]==1?'p-tile':owner[i]==2?'ai-tile':''}`;
+  updateStats();
+};
+
+const checkMilestones = () => {
+    if(pop >= 50 && !flags.copper) {
+        flags.copper=true; currentEra=1;
+        showOverlay('announcement','⚙️ COPPER AGE — THE WHEEL!',
+            'Your people have discovered copper and the wheel!<br><b>Unlocked:</b> Roads ($5), Cabin ($80), Fire Tool ($10)<br><b>Bonus:</b> Roads now grant +5% tax to adjacent dwellings.');
+    }
+    if(pop >= 200 && !flags.iron) {
+        flags.iron=true; currentEra=2;
+        showOverlay('announcement','⚒️ IRON AGE — SMELTING!',
+            'Iron tools reshape your civilization!<br><b>Unlocked:</b> Wheat ($50), Quarry ($400, near mountains), Bulldozer ($100), Vineyard ($150).');
+    }
+    if(pop >= 500 && !flags.sail) {
+        flags.sail=true; currentEra=3;
+        showOverlay('announcement','⛵ AGE OF SAIL — NAVIGATION!',
+            'Your mariners chart the seas!<br><b>Unlocked:</b> Docks ($150), Boats ($100), Rice ($100, water only), Market ($500)<br><b>Bonus:</b> Markets gain +25% tax per adjacent Road/Dock.');
+    }
+    if(pop >= 1200 && !flags.mechanical) {
+        flags.mechanical=true; currentEra=4;
+        showOverlay('announcement','⚙️ MECHANICAL AGE — THE COTTON GIN!',
+            'Steam and gears power a new age!<br><b>Unlocked:</b> House ($250), Silo ($100), Mill ($350)<br><b>Bonus:</b> Industrial buildings now have maintenance costs that double in Winter.');
+    }
+    if(pop >= 2500 && !flags.industrial) {
+        flags.industrial=true; currentEra=5;
+        showOverlay('announcement','🏭 INDUSTRIAL AGE — THE STEAM ENGINE!',
+            'Mass production transforms society!<br><b>Unlocked:</b> Apartment ($1200), Factory ($1500), Bank ($2500)<br>Warning: Factories have high winter maintenance!');
+    }
+    if(pop >= 5000 && !flags.atomic) {
+        flags.atomic=true; currentEra=6;
+        showOverlay('announcement','☢️ ATOMIC AGE — NUCLEAR POWER!',
+            'Humanity splits the atom!<br><b>Unlocked:</b> Refinery ($5000), Dynamite ($500)<br>Ultimate economic power awaits — but at great cost.');
+    }
+};
+
+const checkGameState = () => {
+    let pTiles = owner.filter(o=>o===1).length, landTiles = grid.filter(g=>g!==2).length;
+    if (money < 0) negativeDays++; else negativeDays = 0;
+    if (negativeDays >= 72) { gameOver = true; showOverlay('gameover', 'BANKRUPTCY', 'Your colony went broke.'); clearInterval(timer); }
+    if (popAI >= 5000) { gameOver = true; showOverlay('gameover', 'DEFEAT', 'AI victory.'); clearInterval(timer); }
+    if (pop >= 5000) { gameOver = true; showOverlay('gameover', 'VICTORY!', 'You built an Empire!'); clearInterval(timer); }
+    if (pTiles >= landTiles * 0.75) { gameOver = true; showOverlay('gameover', 'DOMINATION!', 'You control the map!'); clearInterval(timer); }
+};
+
+const aiTick = () => {
+  if (gameOver) return;
+  let avail = [];
+  types.forEach((t, i) => {
+    if (t.cat !== 'None' && t.cat !== 'Discoveries') {
+      let unlocked = !t.reqFlag || flags[t.reqFlag];
+      let eraOk = (t.era === undefined || t.era <= currentEra);
+      if (unlocked && eraOk && moneyAI >= (t.cost||0)) avail.push(i);
+    }
+  });
+  // AI dynamite attack (idx 23)
+  if (avail.includes(23) && Math.random() < 0.15) {
+    for(let i=0; i<grid.length; i++) if (owner[i] === 1 && [15,20,21,22].includes(grid[i])) if (getNeighbors(i, 5).some(n => owner[n]===2)) return build(i, true, 23);
+  }
+  let needsFood = foodAI <= popAI + 20;
+  // Crop indices: 5(Corn),9(Wheat),13(Boats),14(Rice),24(Vineyard); Dwelling/Industry for growth
+  let candidates = needsFood ? [5,9,13,14,24] : [4,7,15,16,20,21];
+  candidates = candidates.filter(t=>avail.includes(t));
+  if (!candidates.length) candidates = avail.filter(t=>t<20);
+  let bestSpot = -1, bestTool = null, bestScore = -Infinity, searchSpace = new Set();
+  for(let i=0; i<grid.length; i++) if(owner[i]===2) { searchSpace.add(i); getNeighbors(i).forEach(n=>searchSpace.add(n)); }
+  for(let k=0; k<30; k++) searchSpace.add(Math.floor(Math.random()*sz*sz));
+  for (let i of searchSpace) for (let tIdx of candidates) if (validateBuild(i, tIdx, 2) === true) {
+    let score = types[tIdx].cost + (types[tIdx].p ? types[tIdx].p*15 : 0);
+    if (score > bestScore) { bestScore = score; bestSpot = i; bestTool = tIdx; }
+  }
+  if (bestSpot !== -1) build(bestSpot, true, bestTool);
+};
+
+const fMonths = ["FROSTFALL","DAWNSEED","SPRINGTIDE","SUNCREST","HIGHSUMMER","GOLDLEAF","HARVESTMATH","EMBERWANE","NIGHTREIGN","DEEPWINTER"];
+const getCalendarInfo = () => { let mIdx = Math.floor(((day-1) % 360) / 36), d = ((day-1) % 36) + 1, y = Math.floor((day-1) / 360) + 1; return { mName: fMonths[mIdx], d: d, y: y, isWinter: mIdx >= 8 }; };
+
+const updateStats = () => {
+  let p=0, f=0, tx=0, ap=0, af=0, atx=0, cal = getCalendarInfo();
+  if (cal.isWinter) document.body.classList.add('winter'); else document.body.classList.remove('winter');
+  // Silos for irrigation bonus (Silo = idx 17)
+  let pSilos = []; grid.forEach((g,i)=>{ if(g===17 && owner[i]===1) pSilos.push(i); });
+  // Road/Railroad/Dock adjacency set for Market bonus
+  const roadDockSet = new Set();
+  grid.forEach((g,i) => { if([6,12].includes(g)) roadDockSet.add(i); });
+
+  grid.forEach((g, i) => {
+    let t = types[g];
+    let isCropWinter = cal.isWinter && isCropTile(g);
+    if (owner[i] == 1) {
+      p += (t.p||0);
+      if (t.food && !isCropWinter) {
+        let foodMult = (flags.iron && pSilos.some(s => getNeighbors(s, 2).includes(i)) ? 1.25 : 1);
+        f += t.food * foodMult;
+      }
+      let tileTax = (t.tax||0);
+      // Market adjacency bonus: +25% per adjacent Road(6) or Dock(12)
+      if (g === 15) {
+        let adjRoads = getNeighbors(i).filter(ni => roadDockSet.has(ni)).length;
+        tileTax *= (1 + adjRoads * 0.25);
+      }
+      // Road bonus: +5% tax to adjacent dwellings (Yurt=4,Cabin=7,House=16,Apt=19)
+      if (g === 6) {
+        getNeighbors(i).forEach(ni => {
+          if(owner[ni]===1 && [4,7,16,19].includes(grid[ni])) tx += (types[grid[ni]].tax||0) * 0.05;
+        });
+      }
+      // Maintenance — doubles in winter for industrial buildings
+      let maint = (t.maint||0);
+      if (cal.isWinter && [10,12,18,20,21,22].includes(g)) maint *= 2;
+      tx += tileTax - maint;
+    }
+    else if (owner[i] == 2) {
+      ap += (t.p||0);
+      if (t.food && !isCropWinter) af += t.food;
+      atx += (t.tax||0);
+    }
+  });
+
+  pop=p; food=Math.floor(f); popAI=ap; foodAI=Math.floor(af);
+  if(pop > highestPop) highestPop = pop;
+
+  // Food consumption survival mechanic
+  let consumed = Math.floor(pop * 0.05);
+  foodBank = Math.max(0, foodBank + food - consumed);
+  starvationActive = (foodBank <= 0 && food < consumed);
+
+  // Stone Age: no tax revenue until Copper Age
+  if (currentEra === 0) tx = 0;
+
+  checkMilestones(); checkGameState();
+  updateUI();
+  return { pTax: Math.floor(tx), aTax: Math.floor(atx) };
+};
+
+const updateUI = () => {
+  document.getElementById('m').innerText = money; document.getElementById('m').style.color = money < 0 ? 'var(--red)' : 'inherit';
+  document.getElementById('p').innerText = pop; document.getElementById('ap').innerText = popAI;
+  document.getElementById('f').innerText = food + (foodBank > 0 ? ` (+${foodBank})` : '');
+  // Starvation warning
+  const hw = document.getElementById('hunger-warn');
+  if (starvationActive) { hw.style.display='inline'; if(Math.floor(day/2)%3===0) notify("⚠️ STARVATION IMMINENT — BUILD FOOD!"); }
+  else hw.style.display='none';
+  let cal = getCalendarInfo();
+  document.getElementById('season').innerText = cal.isWinter ? "WINTER" : "ACTIVE";
+  document.getElementById('season').style.color = cal.isWinter ? "var(--cyan)" : "var(--gold)";
+  document.getElementById('date').innerText = `${cal.mName} ${cal.d}, YR.${cal.y}`;
+  document.getElementById('era-name').innerText = eraNames[currentEra];
+  document.getElementById('rnk').innerText = ["OUTPOST","COLONY","PROVINCE","STATE","EMPIRE"][Math.min(4, (pop/500)|0)];
+  document.getElementById('menu').innerHTML = types.map((t,i) => {
+    if (t.cat !== activeTab) return '';
+    let lock = (t.reqFlag && !flags[t.reqFlag]);
+    let eraLocked = (t.era !== undefined && t.era > currentEra);
+    let isLocked = lock || eraLocked;
+    let lockReason = eraLocked ? `ERA ${t.era}` : (lock ? 'LOCKED' : '');
+    return `<button class="${isLocked?'lock':''} ${tool==i?'active':''}" onclick="setTool(${i}, ${isLocked})" title="${lockReason}">${t.s} ${t.n} ($${t.cost||0})</button>`;
+  }).join('');
+};
+
+window.setTool = (i, isLocked) => { if(!isLocked){ tool=i; updateUI(); }};
+const updateZoom = (val) => { tileSize = parseInt(val); document.documentElement.style.setProperty('--ts', tileSize+'px'); renderMap(); };
+const tick = () => {
+  if(gameOver || paused) return;
+  day++;
+  let taxes = updateStats(); // starvation computed inside updateStats
+  let taxIncome = starvationActive ? Math.floor(taxes.pTax * 0.2) : taxes.pTax;
+  money += Math.floor(pop * 0.1 + taxIncome);
+  moneyAI += Math.floor(popAI * 0.1 + taxes.aTax);
+  if (day % 5 === 0) aiTick();
+};
+
+window.togglePause = () => {
+  paused = !paused;
+  const btn = document.getElementById('pauseBtn');
+  btn.innerText = paused ? '▶ RESUME' : '⏸ PAUSE';
+  btn.style.color = paused ? 'var(--red)' : 'var(--gold)';
+  btn.style.borderColor = paused ? 'var(--red)' : 'var(--gold)';
+};
+
+initMap(); updateZoom(48);
+document.getElementById('spd').oninput = (e) => { clearInterval(timer); speed = [0, 1500, 600, 100][e.target.value]; if(speed > 0) timer = setInterval(tick, speed); };
+timer = setInterval(tick, speed);
+</script>
+</body>
+</html>
